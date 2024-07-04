@@ -1,4 +1,5 @@
 """Tests for the Broadlink integration."""
+
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
@@ -75,6 +76,16 @@ BROADLINK_DEVICES = {
         "Broadlink",
         "SB800TD",
         0x504E,
+        57,
+        5,
+    ),
+    "Gaming room": (
+        "192.168.0.65",
+        "34ea34b61d2d",
+        "MP1-1K4S",
+        "Broadlink",
+        "MP1",
+        0x4EB5,
         57,
         5,
     ),

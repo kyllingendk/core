@@ -1,4 +1,5 @@
 """Support for hive water heaters."""
+
 from datetime import timedelta
 
 import voluptuous as vol
@@ -9,7 +10,7 @@ from homeassistant.components.water_heater import (
     WaterHeaterEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_OFF, STATE_ON, TEMP_CELSIUS
+from homeassistant.const import STATE_OFF, STATE_ON, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -48,11 +49,8 @@ async def async_setup_entry(
 
     hive = hass.data[DOMAIN][entry.entry_id]
     devices = hive.session.deviceList.get("water_heater")
-    entities = []
     if devices:
-        for dev in devices:
-            entities.append(HiveWaterHeater(hive, dev))
-    async_add_entities(entities, True)
+        async_add_entities((HiveWaterHeater(hive, dev) for dev in devices), True)
 
     platform = entity_platform.async_get_current_platform()
 
@@ -74,7 +72,7 @@ class HiveWaterHeater(HiveEntity, WaterHeaterEntity):
     """Hive Water Heater Device."""
 
     _attr_supported_features = WaterHeaterEntityFeature.OPERATION_MODE
-    _attr_temperature_unit = TEMP_CELSIUS
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_operation_list = SUPPORT_WATER_HEATER
 
     @refresh_system
@@ -88,7 +86,7 @@ class HiveWaterHeater(HiveEntity, WaterHeaterEntity):
         await self.hive.hotwater.setMode(self.device, "OFF")
 
     @refresh_system
-    async def async_set_operation_mode(self, operation_mode):
+    async def async_set_operation_mode(self, operation_mode: str) -> None:
         """Set operation mode."""
         new_mode = HASS_TO_HIVE_STATE[operation_mode]
         await self.hive.hotwater.setMode(self.device, new_mode)
@@ -101,7 +99,7 @@ class HiveWaterHeater(HiveEntity, WaterHeaterEntity):
         elif on_off == "off":
             await self.hive.hotwater.setBoostOff(self.device)
 
-    async def async_update(self):
+    async def async_update(self) -> None:
         """Update all Node data from Hive."""
         await self.hive.session.updateData(self.device)
         self.device = await self.hive.hotwater.getWaterHeater(self.device)

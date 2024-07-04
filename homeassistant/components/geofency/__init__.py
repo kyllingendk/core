@@ -1,4 +1,5 @@
 """Support for Geofency."""
+
 from http import HTTPStatus
 
 from aiohttp import web
@@ -144,7 +145,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass, DOMAIN, "Geofency", entry.data[CONF_WEBHOOK_ID], handle_webhook
     )
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 

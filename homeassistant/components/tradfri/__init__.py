@@ -1,4 +1,5 @@
 """Support for IKEA Tradfri."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -135,7 +136,7 @@ async def async_setup_entry(
         async_track_time_interval(hass, async_keep_alive, timedelta(seconds=60))
     )
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

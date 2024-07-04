@@ -1,4 +1,5 @@
 """The nVent RAYCHEM SENZ integration."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -6,14 +7,9 @@ import logging
 
 from aiosenz import SENZAPI, Thermostat
 from httpx import RequestError
-import voluptuous as vol
 
-from homeassistant.components.application_credentials import (
-    ClientCredential,
-    async_import_client_credential,
-)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_CLIENT_ID, CONF_CLIENT_SECRET, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import (
@@ -21,7 +17,6 @@ from homeassistant.helpers import (
     config_validation as cv,
     httpx_client,
 )
-from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import SENZConfigEntryAuth
@@ -31,50 +26,11 @@ UPDATE_INTERVAL = timedelta(seconds=30)
 
 _LOGGER = logging.getLogger(__name__)
 
-CONFIG_SCHEMA = vol.Schema(
-    vol.All(
-        cv.deprecated(DOMAIN),
-        {
-            DOMAIN: vol.Schema(
-                {
-                    vol.Required(CONF_CLIENT_ID): cv.string,
-                    vol.Required(CONF_CLIENT_SECRET): cv.string,
-                }
-            )
-        },
-    ),
-    extra=vol.ALLOW_EXTRA,
-)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = [Platform.CLIMATE]
 
-SENZDataUpdateCoordinator = DataUpdateCoordinator[dict[str, Thermostat]]
-
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the SENZ OAuth2 configuration."""
-    hass.data[DOMAIN] = {}
-
-    if DOMAIN not in config:
-        return True
-
-    await async_import_client_credential(
-        hass,
-        DOMAIN,
-        ClientCredential(
-            config[DOMAIN][CONF_CLIENT_ID],
-            config[DOMAIN][CONF_CLIENT_SECRET],
-        ),
-    )
-    _LOGGER.warning(
-        "Configuration of SENZ integration in YAML is deprecated "
-        "and will be removed in a future release; Your existing OAuth "
-        "Application Credentials have been imported into the UI "
-        "automatically and can be safely removed from your "
-        "configuration.yaml file"
-    )
-
-    return True
+type SENZDataUpdateCoordinator = DataUpdateCoordinator[dict[str, Thermostat]]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -101,7 +57,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except RequestError as err:
         raise ConfigEntryNotReady from err
 
-    coordinator = SENZDataUpdateCoordinator(
+    coordinator: SENZDataUpdateCoordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
         name=account.username,
@@ -111,9 +67,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

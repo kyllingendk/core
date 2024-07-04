@@ -1,4 +1,5 @@
 """OpenTherm Gateway config flow."""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +9,7 @@ from pyotgw import vars as gw_vars
 from serial import SerialException
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.const import (
     CONF_DEVICE,
     CONF_ID,
@@ -26,10 +27,11 @@ from .const import (
     CONF_READ_PRECISION,
     CONF_SET_PRECISION,
     CONF_TEMPORARY_OVRD_MODE,
+    CONNECTION_TIMEOUT,
 )
 
 
-class OpenThermGwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class OpenThermGwConfigFlow(ConfigFlow, domain=DOMAIN):
     """OpenTherm Gateway Config Flow."""
 
     VERSION = 1
@@ -37,7 +39,7 @@ class OpenThermGwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> OpenThermGwOptionsFlow:
         """Get the options flow for this handler."""
         return OpenThermGwOptionsFlow(config_entry)
@@ -59,18 +61,22 @@ class OpenThermGwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             async def test_connection():
                 """Try to connect to the OpenTherm Gateway."""
-                otgw = pyotgw.pyotgw()
-                status = await otgw.connect(self.hass.loop, device)
+                otgw = pyotgw.OpenThermGateway()
+                status = await otgw.connect(device)
                 await otgw.disconnect()
+                if not status:
+                    raise ConnectionError
                 return status[gw_vars.OTGW].get(gw_vars.OTGW_ABOUT)
 
             try:
-                res = await asyncio.wait_for(test_connection(), timeout=10)
-            except (asyncio.TimeoutError, SerialException):
+                async with asyncio.timeout(CONNECTION_TIMEOUT):
+                    await test_connection()
+            except TimeoutError:
+                return self._show_form({"base": "timeout_connect"})
+            except (ConnectionError, SerialException):
                 return self._show_form({"base": "cannot_connect"})
 
-            if res:
-                return self._create_entry(gw_id, name, device)
+            return self._create_entry(gw_id, name, device)
 
         return self._show_form()
 
@@ -79,8 +85,7 @@ class OpenThermGwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_init(user_input)
 
     async def async_step_import(self, import_config):
-        """
-        Import an OpenTherm Gateway device as a config entry.
+        """Import an OpenTherm Gateway device as a config entry.
 
         This flow is triggered by `async_setup` for configured devices.
         """
@@ -112,10 +117,10 @@ class OpenThermGwConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
-class OpenThermGwOptionsFlow(config_entries.OptionsFlow):
+class OpenThermGwOptionsFlow(OptionsFlow):
     """Handle opentherm_gw options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize the options flow."""
         self.config_entry = config_entry
 

@@ -1,4 +1,5 @@
 """Support for VersaSense sensor peripheral."""
+
 from __future__ import annotations
 
 import logging
@@ -89,7 +90,7 @@ class VSensor(SensorEntity):
         """Return if the sensor is available."""
         return self._available
 
-    async def async_update(self):
+    async def async_update(self) -> None:
         """Fetch new state data for the sensor."""
         samples = await self.consumer.fetchPeripheralSample(
             None, self._identifier, self._parent_mac

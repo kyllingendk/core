@@ -1,47 +1,68 @@
-"""
-Helpers for Zigbee Home Automation.
+"""Helpers for Zigbee Home Automation.
 
 For more details about this component, please refer to the documentation at
 https://home-assistant.io/integrations/zha/
 """
+
 from __future__ import annotations
 
-import asyncio
 import binascii
+import collections
 from collections.abc import Callable, Iterator
+import dataclasses
 from dataclasses import dataclass
-import functools
-import itertools
+import enum
 import logging
-from random import uniform
 import re
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, overload
 
 import voluptuous as vol
 import zigpy.exceptions
 import zigpy.types
 import zigpy.util
 import zigpy.zcl
+from zigpy.zcl.foundation import CommandSchema
 import zigpy.zdo.types as zdo_types
 
+from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from homeassistant.components.number import NumberDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, State, callback
-from homeassistant.helpers import device_registry as dr
-
-from .const import (
-    CLUSTER_TYPE_IN,
-    CLUSTER_TYPE_OUT,
-    CUSTOM_CONFIGURATION,
-    DATA_ZHA,
-    DATA_ZHA_GATEWAY,
+from homeassistant.const import (
+    Platform,
+    UnitOfApparentPower,
+    UnitOfDataRate,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfFrequency,
+    UnitOfInformation,
+    UnitOfIrradiance,
+    UnitOfLength,
+    UnitOfMass,
+    UnitOfPower,
+    UnitOfPrecipitationDepth,
+    UnitOfPressure,
+    UnitOfSoundPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
+    UnitOfTime,
+    UnitOfVolume,
+    UnitOfVolumeFlowRate,
+    UnitOfVolumetricFlux,
 )
+from homeassistant.core import HomeAssistant, State, callback
+from homeassistant.helpers import config_validation as cv, device_registry as dr
+from homeassistant.helpers.typing import ConfigType
+
+from .const import CLUSTER_TYPE_IN, CLUSTER_TYPE_OUT, CUSTOM_CONFIGURATION, DATA_ZHA
 from .registries import BINDABLE_CLUSTERS
 
 if TYPE_CHECKING:
     from .device import ZHADevice
     from .gateway import ZHAGateway
 
-_T = TypeVar("_T")
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -76,9 +97,9 @@ async def safe_read(
             only_cache=only_cache,
             manufacturer=manufacturer,
         )
-        return result
-    except Exception:  # pylint: disable=broad-except
+    except Exception:  # noqa: BLE001
         return {}
+    return result
 
 
 async def get_matched_clusters(
@@ -118,6 +139,74 @@ async def get_matched_clusters(
     return clusters_to_bind
 
 
+def cluster_command_schema_to_vol_schema(schema: CommandSchema) -> vol.Schema:
+    """Convert a cluster command schema to a voluptuous schema."""
+    return vol.Schema(
+        {
+            vol.Optional(field.name)
+            if field.optional
+            else vol.Required(field.name): schema_type_to_vol(field.type)
+            for field in schema.fields
+        }
+    )
+
+
+def schema_type_to_vol(field_type: Any) -> Any:
+    """Convert a schema type to a voluptuous type."""
+    if issubclass(field_type, enum.Flag) and field_type.__members__:
+        return cv.multi_select(
+            [key.replace("_", " ") for key in field_type.__members__]
+        )
+    if issubclass(field_type, enum.Enum) and field_type.__members__:
+        return vol.In([key.replace("_", " ") for key in field_type.__members__])
+    if (
+        issubclass(field_type, zigpy.types.FixedIntType)
+        or issubclass(field_type, enum.Flag)
+        or issubclass(field_type, enum.Enum)
+    ):
+        return vol.All(
+            vol.Coerce(int), vol.Range(field_type.min_value, field_type.max_value)
+        )
+    return str
+
+
+def convert_to_zcl_values(
+    fields: dict[str, Any], schema: CommandSchema
+) -> dict[str, Any]:
+    """Convert user input to ZCL values."""
+    converted_fields: dict[str, Any] = {}
+    for field in schema.fields:
+        if field.name not in fields:
+            continue
+        value = fields[field.name]
+        if issubclass(field.type, enum.Flag) and isinstance(value, list):
+            new_value = 0
+
+            for flag in value:
+                if isinstance(flag, str):
+                    new_value |= field.type[flag.replace(" ", "_")]
+                else:
+                    new_value |= flag
+
+            value = field.type(new_value)
+        elif issubclass(field.type, enum.Enum):
+            value = (
+                field.type[value.replace(" ", "_")]
+                if isinstance(value, str)
+                else field.type(value)
+            )
+        else:
+            value = field.type(value)
+        _LOGGER.debug(
+            "Converted ZCL schema field(%s) value from: %s to: %s",
+            field.name,
+            fields[field.name],
+            value,
+        )
+        converted_fields[field.name] = value
+    return converted_fields
+
+
 @callback
 def async_is_bindable_target(source_zha_device, target_zha_device):
     """Determine if target is bindable to source."""
@@ -138,10 +227,10 @@ def async_is_bindable_target(source_zha_device, target_zha_device):
 
 
 @callback
-def async_get_zha_config_value(
+def async_get_zha_config_value[_T](
     config_entry: ConfigEntry, section: str, config_key: str, default: _T
 ) -> _T:
-    """Get the value for the specified configuration from the zha config entry."""
+    """Get the value for the specified configuration from the ZHA config entry."""
     return (
         config_entry.options.get(CUSTOM_CONFIGURATION, {})
         .get(section, {})
@@ -149,11 +238,13 @@ def async_get_zha_config_value(
     )
 
 
-def async_cluster_exists(hass, cluster_id):
+def async_cluster_exists(hass: HomeAssistant, cluster_id, skip_coordinator=True):
     """Determine if a device containing the specified in cluster is paired."""
-    zha_gateway = hass.data[DATA_ZHA][DATA_ZHA_GATEWAY]
+    zha_gateway = get_zha_gateway(hass)
     zha_devices = zha_gateway.devices.values()
     for zha_device in zha_devices:
+        if skip_coordinator and zha_device.is_coordinator:
+            continue
         clusters_by_endpoint = zha_device.async_get_clusters()
         for clusters in clusters_by_endpoint.values():
             if (
@@ -170,10 +261,19 @@ def async_get_zha_device(hass: HomeAssistant, device_id: str) -> ZHADevice:
     device_registry = dr.async_get(hass)
     registry_device = device_registry.async_get(device_id)
     if not registry_device:
-        raise ValueError(f"Device id `{device_id}` not found in registry.")
-    zha_gateway: ZHAGateway = hass.data[DATA_ZHA][DATA_ZHA_GATEWAY]
-    ieee_address = list(list(registry_device.identifiers)[0])[1]
-    ieee = zigpy.types.EUI64.convert(ieee_address)
+        _LOGGER.error("Device id `%s` not found in registry", device_id)
+        raise KeyError(f"Device id `{device_id}` not found in registry.")
+    zha_gateway = get_zha_gateway(hass)
+    try:
+        ieee_address = list(registry_device.identifiers)[0][1]
+        ieee = zigpy.types.EUI64.convert(ieee_address)
+    except (IndexError, ValueError) as ex:
+        _LOGGER.error(
+            "Unable to determine device IEEE for device with device id `%s`", device_id
+        )
+        raise KeyError(
+            f"Unable to determine device IEEE for device with device id `{device_id}`."
+        ) from ex
     return zha_gateway.devices[ieee]
 
 
@@ -191,7 +291,7 @@ def mean_int(*args):
 
 def mean_tuple(*args):
     """Return the mean values along the columns of the supplied values."""
-    return tuple(sum(x) / len(x) for x in zip(*args))
+    return tuple(sum(x) / len(x) for x in zip(*args, strict=False))
 
 
 def reduce_attribute(
@@ -224,69 +324,22 @@ class LogMixin:
 
     def debug(self, msg, *args, **kwargs):
         """Debug level log."""
-        return self.log(logging.DEBUG, msg, *args)
+        return self.log(logging.DEBUG, msg, *args, **kwargs)
 
     def info(self, msg, *args, **kwargs):
         """Info level log."""
-        return self.log(logging.INFO, msg, *args)
+        return self.log(logging.INFO, msg, *args, **kwargs)
 
     def warning(self, msg, *args, **kwargs):
         """Warning method log."""
-        return self.log(logging.WARNING, msg, *args)
+        return self.log(logging.WARNING, msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
         """Error level log."""
-        return self.log(logging.ERROR, msg, *args)
+        return self.log(logging.ERROR, msg, *args, **kwargs)
 
 
-def retryable_req(
-    delays=(1, 5, 10, 15, 30, 60, 120, 180, 360, 600, 900, 1800), raise_=False
-):
-    """Make a method with ZCL requests retryable.
-
-    This adds delays keyword argument to function.
-    len(delays) is number of tries.
-    raise_ if the final attempt should raise the exception.
-    """
-
-    def decorator(func):
-        @functools.wraps(func)
-        async def wrapper(channel, *args, **kwargs):
-
-            exceptions = (zigpy.exceptions.ZigbeeException, asyncio.TimeoutError)
-            try_count, errors = 1, []
-            for delay in itertools.chain(delays, [None]):
-                try:
-                    return await func(channel, *args, **kwargs)
-                except exceptions as ex:
-                    errors.append(ex)
-                    if delay:
-                        delay = uniform(delay * 0.75, delay * 1.25)
-                        channel.debug(
-                            (
-                                "%s: retryable request #%d failed: %s. "
-                                "Retrying in %ss"
-                            ),
-                            func.__name__,
-                            try_count,
-                            ex,
-                            round(delay, 1),
-                        )
-                        try_count += 1
-                        await asyncio.sleep(delay)
-                    else:
-                        channel.warning(
-                            "%s: all attempts have failed: %s", func.__name__, errors
-                        )
-                        if raise_:
-                            raise
-
-        return wrapper
-
-    return decorator
-
-
-def convert_install_code(value: str) -> bytes:
+def convert_install_code(value: str) -> zigpy.types.KeyData:
     """Convert string to install code bytes and validate length."""
 
     try:
@@ -297,10 +350,11 @@ def convert_install_code(value: str) -> bytes:
     if len(code) != 18:  # 16 byte code + 2 crc bytes
         raise vol.Invalid("invalid length of the install code")
 
-    if zigpy.util.convert_install_code(code) is None:
+    link_key = zigpy.util.convert_install_code(code)
+    if link_key is None:
         raise vol.Invalid("invalid install code")
 
-    return code
+    return link_key
 
 
 QR_CODES = (
@@ -322,10 +376,19 @@ QR_CODES = (
         ([0-9a-fA-F]{36})  # install code
         $
     """,
+    # Bosch
+    r"""
+        ^RB01SG
+        [0-9a-fA-F]{34}
+        ([0-9a-fA-F]{16}) # IEEE address
+        DLK
+        ([0-9a-fA-F]{36}|[0-9a-fA-F]{32}) # install code / link key
+        $
+    """,
 )
 
 
-def qr_to_install_code(qr_code: str) -> tuple[zigpy.types.EUI64, bytes]:
+def qr_to_install_code(qr_code: str) -> tuple[zigpy.types.EUI64, zigpy.types.KeyData]:
     """Try to parse the QR code.
 
     if successful, return a tuple of a EUI64 address and install code.
@@ -338,9 +401,123 @@ def qr_to_install_code(qr_code: str) -> tuple[zigpy.types.EUI64, bytes]:
 
         ieee_hex = binascii.unhexlify(match[1])
         ieee = zigpy.types.EUI64(ieee_hex[::-1])
+
+        # Bosch supplies (A) device specific link key (DSLK) or (A) install code + crc
+        if "RB01SG" in code_pattern and len(match[2]) == 32:
+            link_key_hex = binascii.unhexlify(match[2])
+            link_key = zigpy.types.KeyData(link_key_hex)
+            return ieee, link_key
         install_code = match[2]
         # install_code sanity check
-        install_code = convert_install_code(install_code)
-        return ieee, install_code
+        link_key = convert_install_code(install_code)
+        return ieee, link_key
 
     raise vol.Invalid(f"couldn't convert qr code: {qr_code}")
+
+
+@dataclasses.dataclass(kw_only=True, slots=True)
+class ZHAData:
+    """ZHA component data stored in `hass.data`."""
+
+    yaml_config: ConfigType = dataclasses.field(default_factory=dict)
+    platforms: collections.defaultdict[Platform, list] = dataclasses.field(
+        default_factory=lambda: collections.defaultdict(list)
+    )
+    gateway: ZHAGateway | None = dataclasses.field(default=None)
+    device_trigger_cache: dict[str, tuple[str, dict]] = dataclasses.field(
+        default_factory=dict
+    )
+    allow_polling: bool = dataclasses.field(default=False)
+
+
+def get_zha_data(hass: HomeAssistant) -> ZHAData:
+    """Get the global ZHA data object."""
+    if DATA_ZHA not in hass.data:
+        hass.data[DATA_ZHA] = ZHAData()
+
+    return hass.data[DATA_ZHA]
+
+
+def get_zha_gateway(hass: HomeAssistant) -> ZHAGateway:
+    """Get the ZHA gateway object."""
+    if (zha_gateway := get_zha_data(hass).gateway) is None:
+        raise ValueError("No gateway object exists")
+
+    return zha_gateway
+
+
+UNITS_OF_MEASURE = {
+    UnitOfApparentPower.__name__: UnitOfApparentPower,
+    UnitOfPower.__name__: UnitOfPower,
+    UnitOfEnergy.__name__: UnitOfEnergy,
+    UnitOfElectricCurrent.__name__: UnitOfElectricCurrent,
+    UnitOfElectricPotential.__name__: UnitOfElectricPotential,
+    UnitOfTemperature.__name__: UnitOfTemperature,
+    UnitOfTime.__name__: UnitOfTime,
+    UnitOfLength.__name__: UnitOfLength,
+    UnitOfFrequency.__name__: UnitOfFrequency,
+    UnitOfPressure.__name__: UnitOfPressure,
+    UnitOfSoundPressure.__name__: UnitOfSoundPressure,
+    UnitOfVolume.__name__: UnitOfVolume,
+    UnitOfVolumeFlowRate.__name__: UnitOfVolumeFlowRate,
+    UnitOfMass.__name__: UnitOfMass,
+    UnitOfIrradiance.__name__: UnitOfIrradiance,
+    UnitOfVolumetricFlux.__name__: UnitOfVolumetricFlux,
+    UnitOfPrecipitationDepth.__name__: UnitOfPrecipitationDepth,
+    UnitOfSpeed.__name__: UnitOfSpeed,
+    UnitOfInformation.__name__: UnitOfInformation,
+    UnitOfDataRate.__name__: UnitOfDataRate,
+}
+
+
+def validate_unit(quirks_unit: enum.Enum) -> enum.Enum:
+    """Validate and return a unit of measure."""
+    return UNITS_OF_MEASURE[type(quirks_unit).__name__](quirks_unit.value)
+
+
+@overload
+def validate_device_class(
+    device_class_enum: type[BinarySensorDeviceClass],
+    metadata_value,
+    platform: str,
+    logger: logging.Logger,
+) -> BinarySensorDeviceClass | None: ...
+
+
+@overload
+def validate_device_class(
+    device_class_enum: type[SensorDeviceClass],
+    metadata_value,
+    platform: str,
+    logger: logging.Logger,
+) -> SensorDeviceClass | None: ...
+
+
+@overload
+def validate_device_class(
+    device_class_enum: type[NumberDeviceClass],
+    metadata_value,
+    platform: str,
+    logger: logging.Logger,
+) -> NumberDeviceClass | None: ...
+
+
+def validate_device_class(
+    device_class_enum: type[
+        BinarySensorDeviceClass | SensorDeviceClass | NumberDeviceClass
+    ],
+    metadata_value: enum.Enum,
+    platform: str,
+    logger: logging.Logger,
+) -> BinarySensorDeviceClass | SensorDeviceClass | NumberDeviceClass | None:
+    """Validate and return a device class."""
+    try:
+        return device_class_enum(metadata_value.value)
+    except ValueError as ex:
+        logger.warning(
+            "Quirks provided an invalid device class: %s for platform %s: %s",
+            metadata_value,
+            platform,
+            ex,
+        )
+        return None

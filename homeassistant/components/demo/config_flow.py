@@ -1,11 +1,18 @@
 """Config flow to configure demo component."""
+
 from __future__ import annotations
+
+from typing import Any
 
 import voluptuous as vol
 
-from homeassistant import config_entries
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.core import callback
-from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 
 from . import DOMAIN
@@ -17,7 +24,7 @@ CONF_SELECT = "select"
 CONF_MULTISELECT = "multi"
 
 
-class DemoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class DemoConfigFlow(ConfigFlow, domain=DOMAIN):
     """Demo configuration flow."""
 
     VERSION = 1
@@ -25,29 +32,36 @@ class DemoConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
+        config_entry: ConfigEntry,
     ) -> OptionsFlowHandler:
         """Get the options flow for this handler."""
         return OptionsFlowHandler(config_entry)
 
-    async def async_step_import(self, import_info) -> FlowResult:
+    async def async_step_import(self, import_info: dict[str, Any]) -> ConfigFlowResult:
         """Set the config entry up from yaml."""
-        return self.async_create_entry(title="Demo", data={})
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
+        return self.async_create_entry(title="Demo", data=import_info)
 
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
+class OptionsFlowHandler(OptionsFlow):
     """Handle options."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
         self.config_entry = config_entry
         self.options = dict(config_entry.options)
 
-    async def async_step_init(self, user_input=None) -> FlowResult:
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Manage the options."""
         return await self.async_step_options_1()
 
-    async def async_step_options_1(self, user_input=None) -> FlowResult:
+    async def async_step_options_1(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             self.options.update(user_input)
@@ -70,7 +84,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
         )
 
-    async def async_step_options_2(self, user_input=None) -> FlowResult:
+    async def async_step_options_2(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
         """Manage the options 2."""
         if user_input is not None:
             self.options.update(user_input)
@@ -101,6 +117,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             ),
         )
 
-    async def _update_options(self):
+    async def _update_options(self) -> ConfigFlowResult:
         """Update config entry options."""
         return self.async_create_entry(title="", data=self.options)

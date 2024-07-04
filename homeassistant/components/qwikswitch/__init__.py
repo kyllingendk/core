@@ -1,4 +1,5 @@
 """Support for Qwikswitch devices."""
+
 from __future__ import annotations
 
 import logging
@@ -72,6 +73,8 @@ CONFIG_SCHEMA = vol.Schema(
 class QSEntity(Entity):
     """Qwikswitch Entity base."""
 
+    _attr_should_poll = False
+
     def __init__(self, qsid, name):
         """Initialize the QSEntity."""
         self._name = name
@@ -81,11 +84,6 @@ class QSEntity(Entity):
     def name(self):
         """Return the name of the sensor."""
         return self._name
-
-    @property
-    def should_poll(self):
-        """QS sensors gets packets in update_packet."""
-        return False
 
     @property
     def unique_id(self):
@@ -227,7 +225,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 async_dispatcher_send(hass, qspacket[QS_ID], qspacket)
 
         # Update all ha_objects
-        hass.async_add_job(qsusb.update_from_devices)
+        hass.async_create_task(qsusb.update_from_devices())
 
     @callback
     def async_start(_):

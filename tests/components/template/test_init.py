@@ -1,4 +1,5 @@
 """The test for the Template sensor platform."""
+
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -6,14 +7,16 @@ import pytest
 
 from homeassistant import config
 from homeassistant.components.template import DOMAIN
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.reload import SERVICE_RELOAD
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 
-from tests.common import async_fire_time_changed, get_fixture_path
+from tests.common import MockConfigEntry, async_fire_time_changed, get_fixture_path
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -48,7 +51,7 @@ from tests.common import async_fire_time_changed, get_fixture_path
         },
     ],
 )
-async def test_reloadable(hass, start_ha):
+async def test_reloadable(hass: HomeAssistant, start_ha) -> None:
     """Test that we can reload."""
     hass.states.async_set("sensor.test_sensor", "mytest")
     await hass.async_block_till_done()
@@ -76,7 +79,7 @@ async def test_reloadable(hass, start_ha):
     assert hass.states.get("sensor.top_level_2").state == "reload"
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -99,7 +102,7 @@ async def test_reloadable(hass, start_ha):
         },
     ],
 )
-async def test_reloadable_can_remove(hass, start_ha):
+async def test_reloadable_can_remove(hass: HomeAssistant, start_ha) -> None:
     """Test that we can reload and remove all template sensors."""
     hass.states.async_set("sensor.test_sensor", "mytest")
     await hass.async_block_till_done()
@@ -113,7 +116,7 @@ async def test_reloadable_can_remove(hass, start_ha):
     assert len(hass.states.async_all()) == 1
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -129,7 +132,9 @@ async def test_reloadable_can_remove(hass, start_ha):
         },
     ],
 )
-async def test_reloadable_stops_on_invalid_config(hass, start_ha):
+async def test_reloadable_stops_on_invalid_config(
+    hass: HomeAssistant, start_ha
+) -> None:
     """Test we stop the reload if configuration.yaml is completely broken."""
     hass.states.async_set("sensor.test_sensor", "mytest")
     await hass.async_block_till_done()
@@ -141,7 +146,7 @@ async def test_reloadable_stops_on_invalid_config(hass, start_ha):
     assert len(hass.states.async_all()) == 2
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -157,7 +162,9 @@ async def test_reloadable_stops_on_invalid_config(hass, start_ha):
         },
     ],
 )
-async def test_reloadable_handles_partial_valid_config(hass, start_ha):
+async def test_reloadable_handles_partial_valid_config(
+    hass: HomeAssistant, start_ha
+) -> None:
     """Test we can still setup valid sensors when configuration.yaml has a broken entry."""
     hass.states.async_set("sensor.test_sensor", "mytest")
     await hass.async_block_till_done()
@@ -172,7 +179,7 @@ async def test_reloadable_handles_partial_valid_config(hass, start_ha):
     assert float(hass.states.get("sensor.combined_sensor_energy_usage").state) == 0
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -188,7 +195,7 @@ async def test_reloadable_handles_partial_valid_config(hass, start_ha):
         },
     ],
 )
-async def test_reloadable_multiple_platforms(hass, start_ha):
+async def test_reloadable_multiple_platforms(hass: HomeAssistant, start_ha) -> None:
     """Test that we can reload."""
     hass.states.async_set("sensor.test_sensor", "mytest")
     await async_setup_component(
@@ -218,7 +225,7 @@ async def test_reloadable_multiple_platforms(hass, start_ha):
     assert hass.states.get("sensor.top_level_2") is not None
 
 
-@pytest.mark.parametrize("count,domain", [(1, "sensor")])
+@pytest.mark.parametrize(("count", "domain"), [(1, "sensor")])
 @pytest.mark.parametrize(
     "config",
     [
@@ -232,7 +239,9 @@ async def test_reloadable_multiple_platforms(hass, start_ha):
         },
     ],
 )
-async def test_reload_sensors_that_reference_other_template_sensors(hass, start_ha):
+async def test_reload_sensors_that_reference_other_template_sensors(
+    hass: HomeAssistant, start_ha
+) -> None:
     """Test that we can reload sensor that reference other template sensors."""
     await async_yaml_patch_helper(hass, "ref_configuration.yaml")
     assert len(hass.states.async_all()) == 3
@@ -240,7 +249,7 @@ async def test_reload_sensors_that_reference_other_template_sensors(hass, start_
 
     next_time = dt_util.utcnow() + timedelta(seconds=1.2)
     with patch(
-        "homeassistant.helpers.ratelimit.dt_util.utcnow", return_value=next_time
+        "homeassistant.helpers.ratelimit.time.time", return_value=next_time.timestamp()
     ):
         async_fire_time_changed(hass, next_time)
         await hass.async_block_till_done()
@@ -260,3 +269,91 @@ async def async_yaml_patch_helper(hass, filename):
             blocking=True,
         )
         await hass.async_block_till_done()
+
+
+async def test_change_device(
+    hass: HomeAssistant,
+    device_registry: dr.DeviceRegistry,
+) -> None:
+    """Test remove the device registry configuration entry when the device changes."""
+
+    # Configure a device registry
+    entry_device1 = MockConfigEntry()
+    entry_device1.add_to_hass(hass)
+    device1 = device_registry.async_get_or_create(
+        config_entry_id=entry_device1.entry_id,
+        identifiers={("test", "identifier_test1")},
+        connections={("mac", "20:31:32:33:34:01")},
+    )
+    entry_device2 = MockConfigEntry()
+    entry_device2.add_to_hass(hass)
+    device2 = device_registry.async_get_or_create(
+        config_entry_id=entry_device1.entry_id,
+        identifiers={("test", "identifier_test2")},
+        connections={("mac", "20:31:32:33:34:02")},
+    )
+    await hass.async_block_till_done()
+
+    device_id1 = device1.id
+    assert device_id1 is not None
+
+    device_id2 = device2.id
+    assert device_id2 is not None
+
+    # Setup the config entry (binary_sensor)
+    sensor_config_entry = MockConfigEntry(
+        data={},
+        domain=DOMAIN,
+        options={
+            "template_type": "binary_sensor",
+            "name": "Teste",
+            "state": "{{15}}",
+            "device_id": device_id1,
+        },
+        title="Binary sensor template",
+    )
+    sensor_config_entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(sensor_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Confirm that the configuration entry has been added to the device 1 registry (current)
+    current_device = device_registry.async_get(device_id=device_id1)
+    assert sensor_config_entry.entry_id in current_device.config_entries
+
+    # Change configuration options to use device 2 and reload the integration
+    result = await hass.config_entries.options.async_init(sensor_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "state": "{{15}}",
+            "device_id": device_id2,
+        },
+    )
+    await hass.async_block_till_done()
+
+    # Confirm that the configuration entry has been removed from the device 1 registry (previous)
+    previous_device = device_registry.async_get(device_id=device_id1)
+    assert sensor_config_entry.entry_id not in previous_device.config_entries
+
+    # Confirm that the configuration entry has been added to the device 2 registry (current)
+    current_device = device_registry.async_get(device_id=device_id2)
+    assert sensor_config_entry.entry_id in current_device.config_entries
+
+    result = await hass.config_entries.options.async_init(sensor_config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "state": "{{15}}",
+        },
+    )
+    await hass.async_block_till_done()
+
+    # Confirm that the configuration entry has been removed from the device 2 registry (previous)
+    previous_device = device_registry.async_get(device_id=device_id2)
+    assert sensor_config_entry.entry_id not in previous_device.config_entries
+
+    # Confirm that there is no device with the helper configuration entry
+    assert (
+        dr.async_entries_for_config_entry(device_registry, sensor_config_entry.entry_id)
+        == []
+    )

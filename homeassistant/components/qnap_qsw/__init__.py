@@ -1,4 +1,5 @@
 """The QNAP QSW integration."""
+
 from __future__ import annotations
 
 import logging
@@ -48,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         QSW_COORD_FW: coord_fw,
     }
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

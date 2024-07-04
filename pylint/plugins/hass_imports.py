@@ -1,4 +1,5 @@
 """Plugin for checking imports."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,6 +19,21 @@ class ObsoleteImportMatch:
 
 
 _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
+    "homeassistant.backports.enum": [
+        ObsoleteImportMatch(
+            reason="We can now use the Python 3.11 provided enum.StrEnum instead",
+            constant=re.compile(r"^StrEnum$"),
+        ),
+    ],
+    "homeassistant.backports.functools": [
+        ObsoleteImportMatch(
+            reason=(
+                "We can now use the Python 3.12 provided "
+                "functools.cached_property instead"
+            ),
+            constant=re.compile(r"^cached_property$"),
+        ),
+    ],
     "homeassistant.components.alarm_control_panel": [
         ObsoleteImportMatch(
             reason="replaced by AlarmControlPanelEntityFeature enum",
@@ -38,7 +54,21 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
             constant=re.compile(r"^FORMAT_(\w*)$"),
         ),
     ],
-    "homeassistant.components.binarysensor": [
+    "homeassistant.components.automation": [
+        ObsoleteImportMatch(
+            reason="replaced by TriggerActionType from helpers.trigger",
+            constant=re.compile(r"^AutomationActionType$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by TriggerData from helpers.trigger",
+            constant=re.compile(r"^AutomationTriggerData$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by TriggerInfo from helpers.trigger",
+            constant=re.compile(r"^AutomationTriggerInfo$"),
+        ),
+    ],
+    "homeassistant.components.binary_sensor": [
         ObsoleteImportMatch(
             reason="replaced by BinarySensorDeviceClass enum",
             constant=re.compile(r"^DEVICE_CLASS_(\w*)$"),
@@ -94,6 +124,18 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
             constant=re.compile(r"^SUPPORT_(\w*)$"),
         ),
     ],
+    "homeassistant.components.device_tracker": [
+        ObsoleteImportMatch(
+            reason="replaced by SourceType enum",
+            constant=re.compile(r"^SOURCE_TYPE_\w+$"),
+        ),
+    ],
+    "homeassistant.components.device_tracker.const": [
+        ObsoleteImportMatch(
+            reason="replaced by SourceType enum",
+            constant=re.compile(r"^SOURCE_TYPE_\w+$"),
+        ),
+    ],
     "homeassistant.components.fan": [
         ObsoleteImportMatch(
             reason="replaced by FanEntityFeature enum",
@@ -132,6 +174,10 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
             constant=re.compile(r"^COLOR_MODE_(\w*)$"),
         ),
         ObsoleteImportMatch(
+            reason="replaced by color modes",
+            constant=re.compile("^SUPPORT_(BRIGHTNESS|COLOR_TEMP|COLOR)$"),
+        ),
+        ObsoleteImportMatch(
             reason="replaced by LightEntityFeature enum",
             constant=re.compile("^SUPPORT_(EFFECT|FLASH|TRANSITION)$"),
         ),
@@ -145,11 +191,35 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
             reason="replaced by MediaPlayerEntityFeature enum",
             constant=re.compile(r"^SUPPORT_(\w*)$"),
         ),
+        ObsoleteImportMatch(
+            reason="replaced by MediaClass enum",
+            constant=re.compile(r"^MEDIA_CLASS_(\w*)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by MediaType enum",
+            constant=re.compile(r"^MEDIA_TYPE_(\w*)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by RepeatMode enum",
+            constant=re.compile(r"^REPEAT_MODE(\w*)$"),
+        ),
     ],
     "homeassistant.components.media_player.const": [
         ObsoleteImportMatch(
             reason="replaced by MediaPlayerEntityFeature enum",
             constant=re.compile(r"^SUPPORT_(\w*)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by MediaClass enum",
+            constant=re.compile(r"^MEDIA_CLASS_(\w*)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by MediaType enum",
+            constant=re.compile(r"^MEDIA_TYPE_(\w*)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by RepeatMode enum",
+            constant=re.compile(r"^REPEAT_MODE(\w*)$"),
         ),
     ],
     "homeassistant.components.remote": [
@@ -161,7 +231,7 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
     "homeassistant.components.sensor": [
         ObsoleteImportMatch(
             reason="replaced by SensorDeviceClass enum",
-            constant=re.compile(r"^DEVICE_CLASS_(\w*)$"),
+            constant=re.compile(r"^DEVICE_CLASS_(?!STATE_CLASSES)$"),
         ),
         ObsoleteImportMatch(
             reason="replaced by SensorStateClass enum",
@@ -206,12 +276,76 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
     ],
     "homeassistant.const": [
         ObsoleteImportMatch(
-            reason="replaced by SensorDeviceClass enum",
-            constant=re.compile(r"^DEVICE_CLASS_(\w*)$"),
+            reason="replaced by local constants",
+            constant=re.compile(r"^CONF_UNIT_SYSTEM_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^DATA_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by ***DeviceClass enum",
+            constant=re.compile(r"^DEVICE_CLASS_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^ELECTRIC_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^ENERGY_(\w+)$"),
         ),
         ObsoleteImportMatch(
             reason="replaced by EntityCategory enum",
-            constant=re.compile(r"^(ENTITY_CATEGORY_(\w*))|(ENTITY_CATEGORIES)$"),
+            constant=re.compile(r"^(ENTITY_CATEGORY_(\w+))|(ENTITY_CATEGORIES)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^FREQUENCY_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^IRRADIATION_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^LENGTH_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^MASS_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^POWER_(?!VOLT_AMPERE_REACTIVE)(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^PRECIPITATION_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^PRESSURE_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^SOUND_PRESSURE_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^SPEED_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^TEMP_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^TIME_(\w+)$"),
+        ),
+        ObsoleteImportMatch(
+            reason="replaced by unit enums",
+            constant=re.compile(r"^VOLUME_(\w+)$"),
         ),
     ],
     "homeassistant.core": [
@@ -226,16 +360,74 @@ _OBSOLETE_IMPORT: dict[str, list[ObsoleteImportMatch]] = {
             constant=re.compile(r"^RESULT_TYPE_(\w*)$"),
         ),
     ],
+    "homeassistant.helpers.config_validation": [
+        ObsoleteImportMatch(
+            reason="should be imported from homeassistant/components/<platform>",
+            constant=re.compile(r"^PLATFORM_SCHEMA(_BASE)?$"),
+        ),
+    ],
     "homeassistant.helpers.device_registry": [
         ObsoleteImportMatch(
             reason="replaced by DeviceEntryDisabler enum",
             constant=re.compile(r"^DISABLED_(\w*)$"),
         ),
     ],
+    "homeassistant.helpers.json": [
+        ObsoleteImportMatch(
+            reason="moved to homeassistant.util.json",
+            constant=re.compile(
+                r"^JSON_DECODE_EXCEPTIONS|JSON_ENCODE_EXCEPTIONS|json_loads$"
+            ),
+        ),
+    ],
+    "homeassistant.util": [
+        ObsoleteImportMatch(
+            reason="replaced by unit_conversion.***Converter",
+            constant=re.compile(r"^(distance|pressure|speed|temperature|volume)$"),
+        ),
+    ],
+    "homeassistant.util.unit_system": [
+        ObsoleteImportMatch(
+            reason="replaced by US_CUSTOMARY_SYSTEM",
+            constant=re.compile(r"^IMPERIAL_SYSTEM$"),
+        ),
+    ],
 }
 
 
-class HassImportsFormatChecker(BaseChecker):  # type: ignore[misc]
+# Blacklist of imports that should be using the namespace
+@dataclass
+class NamespaceAlias:
+    """Class for namespace imports."""
+
+    alias: str
+    names: set[str]  # function names
+
+
+_FORCE_NAMESPACE_IMPORT: dict[str, NamespaceAlias] = {
+    "homeassistant.helpers.area_registry": NamespaceAlias("ar", {"async_get"}),
+    "homeassistant.helpers.category_registry": NamespaceAlias("cr", {"async_get"}),
+    "homeassistant.helpers.device_registry": NamespaceAlias(
+        "dr",
+        {
+            "async_get",
+            "async_entries_for_config_entry",
+        },
+    ),
+    "homeassistant.helpers.entity_registry": NamespaceAlias(
+        "er",
+        {
+            "async_get",
+            "async_entries_for_config_entry",
+        },
+    ),
+    "homeassistant.helpers.floor_registry": NamespaceAlias("fr", {"async_get"}),
+    "homeassistant.helpers.issue_registry": NamespaceAlias("ir", {"async_get"}),
+    "homeassistant.helpers.label_registry": NamespaceAlias("lr", {"async_get"}),
+}
+
+
+class HassImportsFormatChecker(BaseChecker):
     """Checker for imports."""
 
     name = "hass_imports"
@@ -251,15 +443,33 @@ class HassImportsFormatChecker(BaseChecker):  # type: ignore[misc]
             "hass-deprecated-import",
             "Used when import is deprecated",
         ),
+        "W7423": (
+            "Absolute import should be used",
+            "hass-absolute-import",
+            "Used when relative import should be replaced with absolute import",
+        ),
+        "W7424": (
+            "Import should be using the component root",
+            "hass-component-root-import",
+            "Used when an import from another component should be "
+            "from the component root",
+        ),
+        "W7425": (
+            "`%s` should not be imported directly. Please import `%s` as `%s` "
+            "and use `%s.%s`",
+            "hass-helper-namespace-import",
+            "Used when a helper should be used via the namespace",
+        ),
     }
     options = ()
 
-    def __init__(self, linter: PyLinter | None = None) -> None:
+    def __init__(self, linter: PyLinter) -> None:
+        """Initialize the HassImportsFormatChecker."""
         super().__init__(linter)
         self.current_package: str | None = None
 
     def visit_module(self, node: nodes.Module) -> None:
-        """Called when a Module node is visited."""
+        """Determine current package."""
         if node.package:
             self.current_package = node.name
         else:
@@ -267,20 +477,83 @@ class HassImportsFormatChecker(BaseChecker):  # type: ignore[misc]
             self.current_package = node.name[: node.name.rfind(".")]
 
     def visit_import(self, node: nodes.Import) -> None:
-        """Called when a Import node is visited."""
+        """Check for improper `import _` invocations."""
+        if self.current_package is None:
+            return
         for module, _alias in node.names:
             if module.startswith(f"{self.current_package}."):
                 self.add_message("hass-relative-import", node=node)
+                continue
+            if module.startswith("homeassistant.components.") and module.endswith(
+                "const"
+            ):
+                if (
+                    self.current_package.startswith("tests.components.")
+                    and self.current_package.split(".")[2] == module.split(".")[2]
+                ):
+                    # Ignore check if the component being tested matches
+                    # the component being imported from
+                    continue
+                self.add_message("hass-component-root-import", node=node)
+
+    def _visit_importfrom_relative(
+        self, current_package: str, node: nodes.ImportFrom
+    ) -> None:
+        """Check for improper 'from ._ import _' invocations."""
+        if (
+            node.level <= 1
+            or not current_package.startswith("homeassistant.components.")
+            and not current_package.startswith("tests.components.")
+        ):
+            return
+        split_package = current_package.split(".")
+        if not node.modname and len(split_package) == node.level + 1:
+            for name in node.names:
+                # Allow relative import to component root
+                if name[0] != split_package[2]:
+                    self.add_message("hass-absolute-import", node=node)
+                    return
+            return
+        if len(split_package) < node.level + 2:
+            self.add_message("hass-absolute-import", node=node)
 
     def visit_importfrom(self, node: nodes.ImportFrom) -> None:
-        """Called when a ImportFrom node is visited."""
+        """Check for improper 'from _ import _' invocations."""
+        if not self.current_package:
+            return
         if node.level is not None:
+            self._visit_importfrom_relative(self.current_package, node)
             return
         if node.modname == self.current_package or node.modname.startswith(
             f"{self.current_package}."
         ):
             self.add_message("hass-relative-import", node=node)
-        elif obsolete_imports := _OBSOLETE_IMPORT.get(node.modname):
+            return
+        for root in ("homeassistant", "tests"):
+            if self.current_package.startswith(f"{root}.components."):
+                current_component = self.current_package.split(".")[2]
+                if node.modname == f"{root}.components":
+                    for name in node.names:
+                        if name[0] == current_component:
+                            self.add_message("hass-relative-import", node=node)
+                    return
+                if node.modname.startswith(f"{root}.components.{current_component}."):
+                    self.add_message("hass-relative-import", node=node)
+                    return
+        if node.modname.startswith("homeassistant.components.") and (
+            node.modname.endswith(".const")
+            or "const" in {names[0] for names in node.names}
+        ):
+            if (
+                self.current_package.startswith("tests.components.")
+                and self.current_package.split(".")[2] == node.modname.split(".")[2]
+            ):
+                # Ignore check if the component being tested matches
+                # the component being imported from
+                return
+            self.add_message("hass-component-root-import", node=node)
+            return
+        if obsolete_imports := _OBSOLETE_IMPORT.get(node.modname):
             for name_tuple in node.names:
                 for obsolete_import in obsolete_imports:
                     if import_match := obsolete_import.constant.match(name_tuple[0]):
@@ -289,6 +562,20 @@ class HassImportsFormatChecker(BaseChecker):  # type: ignore[misc]
                             node=node,
                             args=(import_match.string, obsolete_import.reason),
                         )
+        if namespace_alias := _FORCE_NAMESPACE_IMPORT.get(node.modname):
+            for name in node.names:
+                if name[0] in namespace_alias.names:
+                    self.add_message(
+                        "hass-helper-namespace-import",
+                        node=node,
+                        args=(
+                            name[0],
+                            node.modname,
+                            namespace_alias.alias,
+                            namespace_alias.alias,
+                            name[0],
+                        ),
+                    )
 
 
 def register(linter: PyLinter) -> None:

@@ -1,4 +1,5 @@
 """Update platform for Supervisor."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -16,14 +17,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import (
-    ADDONS_COORDINATOR,
-    async_update_addon,
-    async_update_core,
-    async_update_os,
-    async_update_supervisor,
-)
 from .const import (
+    ADDONS_COORDINATOR,
     ATTR_AUTO_UPDATE,
     ATTR_CHANGELOG,
     ATTR_VERSION,
@@ -39,7 +34,13 @@ from .entity import (
     HassioOSEntity,
     HassioSupervisorEntity,
 )
-from .handler import HassioAPIError
+from .handler import (
+    HassioAPIError,
+    async_update_addon,
+    async_update_core,
+    async_update_os,
+    async_update_supervisor,
+)
 
 ENTITY_DESCRIPTION = UpdateEntityDescription(
     name="Update",
@@ -66,14 +67,14 @@ async def async_setup_entry(
         ),
     ]
 
-    for addon in coordinator.data[DATA_KEY_ADDONS].values():
-        entities.append(
-            SupervisorAddonUpdateEntity(
-                addon=addon,
-                coordinator=coordinator,
-                entity_description=ENTITY_DESCRIPTION,
-            )
+    entities.extend(
+        SupervisorAddonUpdateEntity(
+            addon=addon,
+            coordinator=coordinator,
+            entity_description=ENTITY_DESCRIPTION,
         )
+        for addon in coordinator.data[DATA_KEY_ADDONS].values()
+    )
 
     if coordinator.is_hass_os:
         entities.append(
@@ -101,7 +102,7 @@ class SupervisorAddonUpdateEntity(HassioAddonEntity, UpdateEntity):
         return self.coordinator.data[DATA_KEY_ADDONS][self._addon_slug]
 
     @property
-    def auto_update(self):
+    def auto_update(self) -> bool:
         """Return true if auto-update is enabled for the add-on."""
         return self._addon_data[ATTR_AUTO_UPDATE]
 
@@ -159,7 +160,7 @@ class SupervisorAddonUpdateEntity(HassioAddonEntity, UpdateEntity):
     async def async_install(
         self,
         version: str | None = None,
-        backup: bool | None = False,
+        backup: bool = False,
         **kwargs: Any,
     ) -> None:
         """Install an update."""
@@ -167,8 +168,8 @@ class SupervisorAddonUpdateEntity(HassioAddonEntity, UpdateEntity):
             await async_update_addon(self.hass, slug=self._addon_slug, backup=backup)
         except HassioAPIError as err:
             raise HomeAssistantError(f"Error updating {self.title}: {err}") from err
-        else:
-            await self.coordinator.force_info_update_supervisor()
+
+        await self.coordinator.force_info_update_supervisor()
 
 
 class SupervisorOSUpdateEntity(HassioOSEntity, UpdateEntity):
@@ -181,17 +182,17 @@ class SupervisorOSUpdateEntity(HassioOSEntity, UpdateEntity):
 
     @property
     def latest_version(self) -> str:
-        """Return native value of entity."""
+        """Return the latest version."""
         return self.coordinator.data[DATA_KEY_OS][ATTR_VERSION_LATEST]
 
     @property
     def installed_version(self) -> str:
-        """Return native value of entity."""
+        """Return the installed version."""
         return self.coordinator.data[DATA_KEY_OS][ATTR_VERSION]
 
     @property
     def entity_picture(self) -> str | None:
-        """Return the iconof the entity."""
+        """Return the icon of the entity."""
         return "https://brands.home-assistant.io/homeassistant/icon.png"
 
     @property
@@ -219,19 +220,23 @@ class SupervisorOSUpdateEntity(HassioOSEntity, UpdateEntity):
 class SupervisorSupervisorUpdateEntity(HassioSupervisorEntity, UpdateEntity):
     """Update entity to handle updates for the Home Assistant Supervisor."""
 
-    _attr_auto_update = True
     _attr_supported_features = UpdateEntityFeature.INSTALL
     _attr_title = "Home Assistant Supervisor"
 
     @property
     def latest_version(self) -> str:
-        """Return native value of entity."""
+        """Return the latest version."""
         return self.coordinator.data[DATA_KEY_SUPERVISOR][ATTR_VERSION_LATEST]
 
     @property
     def installed_version(self) -> str:
-        """Return native value of entity."""
+        """Return the installed version."""
         return self.coordinator.data[DATA_KEY_SUPERVISOR][ATTR_VERSION]
+
+    @property
+    def auto_update(self) -> bool:
+        """Return true if auto-update is enabled for supervisor."""
+        return self.coordinator.data[DATA_KEY_SUPERVISOR][ATTR_AUTO_UPDATE]
 
     @property
     def release_url(self) -> str | None:
@@ -243,7 +248,7 @@ class SupervisorSupervisorUpdateEntity(HassioSupervisorEntity, UpdateEntity):
 
     @property
     def entity_picture(self) -> str | None:
-        """Return the iconof the entity."""
+        """Return the icon of the entity."""
         return "https://brands.home-assistant.io/hassio/icon.png"
 
     async def async_install(
@@ -270,17 +275,17 @@ class SupervisorCoreUpdateEntity(HassioCoreEntity, UpdateEntity):
 
     @property
     def latest_version(self) -> str:
-        """Return native value of entity."""
+        """Return the latest version."""
         return self.coordinator.data[DATA_KEY_CORE][ATTR_VERSION_LATEST]
 
     @property
     def installed_version(self) -> str:
-        """Return native value of entity."""
+        """Return the installed version."""
         return self.coordinator.data[DATA_KEY_CORE][ATTR_VERSION]
 
     @property
     def entity_picture(self) -> str | None:
-        """Return the iconof the entity."""
+        """Return the icon of the entity."""
         return "https://brands.home-assistant.io/homeassistant/icon.png"
 
     @property

@@ -1,4 +1,5 @@
 """Xbox friends binary sensors."""
+
 from __future__ import annotations
 
 from functools import partial
@@ -9,9 +10,9 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import XboxUpdateCoordinator
 from .base_sensor import XboxBaseSensorEntity
 from .const import DOMAIN
+from .coordinator import XboxUpdateCoordinator
 
 SENSOR_ATTRIBUTES = ["status", "gamer_score", "account_tier", "gold_tenure"]
 
@@ -56,7 +57,7 @@ def async_update_friends(
     current_ids = set(current)
 
     # Process new favorites, add them to Home Assistant
-    new_entities = []
+    new_entities: list[XboxSensorEntity] = []
     for xuid in new_ids - current_ids:
         current[xuid] = [
             XboxSensorEntity(coordinator, xuid, attribute)
@@ -64,8 +65,7 @@ def async_update_friends(
         ]
         new_entities = new_entities + current[xuid]
 
-    if new_entities:
-        async_add_entities(new_entities)
+    async_add_entities(new_entities)
 
     # Process deleted favorites, remove them from Home Assistant
     for xuid in current_ids - new_ids:
@@ -77,7 +77,7 @@ def async_update_friends(
 async def async_remove_entities(
     xuid: str,
     coordinator: XboxUpdateCoordinator,
-    current: dict[str, XboxSensorEntity],
+    current: dict[str, list[XboxSensorEntity]],
 ) -> None:
     """Remove friend sensors from Home Assistant."""
     registry = er.async_get(coordinator.hass)

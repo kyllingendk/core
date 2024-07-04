@@ -1,17 +1,12 @@
 """Define RainMachine data models."""
+
 from dataclasses import dataclass
 
+from homeassistant.helpers.entity import EntityDescription
 
-@dataclass
-class RainMachineDescriptionMixinApiCategory:
-    """Define an entity description mixin for binary and regular sensors."""
+
+@dataclass(frozen=True, kw_only=True)
+class RainMachineEntityDescription(EntityDescription):
+    """Describe a RainMachine entity."""
 
     api_category: str
-    data_key: str
-
-
-@dataclass
-class RainMachineDescriptionMixinUid:
-    """Define an entity description mixin for switches."""
-
-    uid: int

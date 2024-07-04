@@ -1,5 +1,8 @@
 """Provides device automations for RFXCOM RFXtrx."""
+
 from __future__ import annotations
+
+from collections.abc import Callable
 
 import voluptuous as vol
 
@@ -48,24 +51,22 @@ async def async_get_actions(
     except ValueError:
         return []
 
-    actions = []
-    for action_type in ACTION_TYPES:
-        if hasattr(device, action_type):
-            data: dict[int, str] = getattr(device, ACTION_SELECTION[action_type], {})
-            for value in data.values():
-                actions.append(
-                    {
-                        CONF_DEVICE_ID: device_id,
-                        CONF_DOMAIN: DOMAIN,
-                        CONF_TYPE: action_type,
-                        CONF_SUBTYPE: value,
-                    }
-                )
-
-    return actions
+    return [
+        {
+            CONF_DEVICE_ID: device_id,
+            CONF_DOMAIN: DOMAIN,
+            CONF_TYPE: action_type,
+            CONF_SUBTYPE: value,
+        }
+        for action_type in ACTION_TYPES
+        if hasattr(device, action_type)
+        for value in getattr(device, ACTION_SELECTION[action_type], {}).values()
+    ]
 
 
-def _get_commands(hass, device_id, action_type):
+def _get_commands(
+    hass: HomeAssistant, device_id: str, action_type: str
+) -> tuple[dict[str, str], Callable[..., None]]:
     device = async_get_device_object(hass, device_id)
     send_fun = getattr(device, action_type)
     commands = getattr(device, ACTION_SELECTION[action_type], {})

@@ -1,7 +1,9 @@
 """Support for the Opple light."""
+
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from pyoppleio.OppleLightDevice import OppleLightDevice
 import voluptuous as vol
@@ -9,7 +11,7 @@ import voluptuous as vol
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_COLOR_TEMP,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as LIGHT_PLATFORM_SCHEMA,
     ColorMode,
     LightEntity,
 )
@@ -27,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_NAME = "opple light"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = LIGHT_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_HOST): cv.string,
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
@@ -68,7 +70,7 @@ class OppleLight(LightEntity):
         self._color_temp = None
 
     @property
-    def available(self):
+    def available(self) -> bool:
         """Return True if light is available."""
         return self._device.is_online
 
@@ -107,7 +109,7 @@ class OppleLight(LightEntity):
         """Return maximum supported color temperature."""
         return 333
 
-    def turn_on(self, **kwargs):
+    def turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
         _LOGGER.debug("Turn on light %s %s", self._device.ip, kwargs)
         if not self.is_on:
@@ -120,12 +122,12 @@ class OppleLight(LightEntity):
             color_temp = mired_to_kelvin(kwargs[ATTR_COLOR_TEMP])
             self._device.color_temperature = color_temp
 
-    def turn_off(self, **kwargs):
+    def turn_off(self, **kwargs: Any) -> None:
         """Instruct the light to turn off."""
         self._device.power_on = False
         _LOGGER.debug("Turn off light %s", self._device.ip)
 
-    def update(self):
+    def update(self) -> None:
         """Synchronize state with light."""
         prev_available = self.available
         self._device.update()
@@ -150,8 +152,7 @@ class OppleLight(LightEntity):
             _LOGGER.debug("Update light %s success: power off", self._device.ip)
         else:
             _LOGGER.debug(
-                "Update light %s success: power on brightness %s "
-                "color temperature %s",
+                "Update light %s success: power on brightness %s color temperature %s",
                 self._device.ip,
                 self._brightness,
                 self._color_temp,

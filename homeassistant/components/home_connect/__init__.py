@@ -1,4 +1,5 @@
 """Support for BSH Home Connect appliances."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -7,18 +8,8 @@ import logging
 from requests import HTTPError
 import voluptuous as vol
 
-from homeassistant.components.application_credentials import (
-    ClientCredential,
-    async_import_client_credential,
-)
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    ATTR_DEVICE_ID,
-    CONF_CLIENT_ID,
-    CONF_CLIENT_SECRET,
-    CONF_DEVICE,
-    Platform,
-)
+from homeassistant.const import ATTR_DEVICE_ID, CONF_DEVICE, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
     config_entry_oauth2_flow,
@@ -50,20 +41,7 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(minutes=1)
 
-CONFIG_SCHEMA = vol.Schema(
-    vol.All(
-        cv.deprecated(DOMAIN),
-        {
-            DOMAIN: vol.Schema(
-                {
-                    vol.Required(CONF_CLIENT_ID): cv.string,
-                    vol.Required(CONF_CLIENT_SECRET): cv.string,
-                }
-            )
-        },
-    ),
-    extra=vol.ALLOW_EXTRA,
-)
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 SERVICE_SETTING_SCHEMA = vol.Schema(
     {
@@ -103,63 +81,46 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.LIGHT, Platform.SENSOR, Platform.S
 
 def _get_appliance_by_device_id(
     hass: HomeAssistant, device_id: str
-) -> api.HomeConnectDevice | None:
+) -> api.HomeConnectDevice:
     """Return a Home Connect appliance instance given an device_id."""
     for hc_api in hass.data[DOMAIN].values():
         for dev_dict in hc_api.devices:
             device = dev_dict[CONF_DEVICE]
             if device.device_id == device_id:
                 return device.appliance
-    _LOGGER.error("Appliance for device id %s not found", device_id)
-    return None
+    raise ValueError(f"Appliance for device id {device_id} not found")
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Home Connect component."""
     hass.data[DOMAIN] = {}
 
-    if DOMAIN not in config:
-        return True
-
-    await async_import_client_credential(
-        hass,
-        DOMAIN,
-        ClientCredential(
-            config[DOMAIN][CONF_CLIENT_ID],
-            config[DOMAIN][CONF_CLIENT_SECRET],
-        ),
-    )
-    _LOGGER.warning(
-        "Configuration of Home Connect integration in YAML is deprecated and "
-        "will be removed in a future release; Your existing OAuth "
-        "Application Credentials have been imported into the UI "
-        "automatically and can be safely removed from your "
-        "configuration.yaml file"
-    )
-
     async def _async_service_program(call, method):
         """Execute calls to services taking a program."""
         program = call.data[ATTR_PROGRAM]
         device_id = call.data[ATTR_DEVICE_ID]
-        options = {
-            ATTR_KEY: call.data.get(ATTR_KEY),
-            ATTR_VALUE: call.data.get(ATTR_VALUE),
-            ATTR_UNIT: call.data.get(ATTR_UNIT),
-        }
+
+        options = []
+
+        option_key = call.data.get(ATTR_KEY)
+        if option_key is not None:
+            option = {ATTR_KEY: option_key, ATTR_VALUE: call.data[ATTR_VALUE]}
+
+            option_unit = call.data.get(ATTR_UNIT)
+            if option_unit is not None:
+                option[ATTR_UNIT] = option_unit
+
+            options.append(option)
 
         appliance = _get_appliance_by_device_id(hass, device_id)
-        if appliance is not None:
-            await hass.async_add_executor_job(
-                getattr(appliance, method), program, options
-            )
+        await hass.async_add_executor_job(getattr(appliance, method), program, options)
 
     async def _async_service_command(call, command):
         """Execute calls to services executing a command."""
         device_id = call.data[ATTR_DEVICE_ID]
 
         appliance = _get_appliance_by_device_id(hass, device_id)
-        if appliance is not None:
-            await hass.async_add_executor_job(appliance.execute_command, command)
+        await hass.async_add_executor_job(appliance.execute_command, command)
 
     async def _async_service_key_value(call, method):
         """Execute calls to services taking a key and value."""
@@ -169,20 +130,19 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         device_id = call.data[ATTR_DEVICE_ID]
 
         appliance = _get_appliance_by_device_id(hass, device_id)
-        if appliance is not None:
-            if unit is not None:
-                await hass.async_add_executor_job(
-                    getattr(appliance, method),
-                    key,
-                    value,
-                    unit,
-                )
-            else:
-                await hass.async_add_executor_job(
-                    getattr(appliance, method),
-                    key,
-                    value,
-                )
+        if unit is not None:
+            await hass.async_add_executor_job(
+                getattr(appliance, method),
+                key,
+                value,
+                unit,
+            )
+        else:
+            await hass.async_add_executor_job(
+                getattr(appliance, method),
+                key,
+                value,
+            )
 
     async def async_service_option_active(call):
         """Service for setting an option for an active program."""
@@ -269,7 +229,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await update_all_devices(hass, entry)
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

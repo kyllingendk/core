@@ -1,14 +1,17 @@
 """Intellifire Climate Entities."""
+
 from __future__ import annotations
+
+from typing import Any
 
 from homeassistant.components.climate import (
     ClimateEntity,
     ClimateEntityDescription,
     ClimateEntityFeature,
+    HVACMode,
 )
-from homeassistant.components.climate.const import HVACMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, TEMP_CELSIUS
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -47,10 +50,15 @@ class IntellifireClimate(IntellifireEntity, ClimateEntity):
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_min_temp = 0
     _attr_max_temp = 37
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
+    )
     _attr_target_temperature_step = 1.0
-    _attr_temperature_unit = TEMP_CELSIUS
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
     last_temp = DEFAULT_THERMOSTAT_TEMP
+    _enable_turn_on_off_backwards_compatibility = False
 
     def __init__(
         self,
@@ -64,13 +72,13 @@ class IntellifireClimate(IntellifireEntity, ClimateEntity):
             self.last_temp = coordinator.data.thermostat_setpoint_c
 
     @property
-    def hvac_mode(self) -> str:
+    def hvac_mode(self) -> HVACMode:
         """Return current hvac mode."""
         if self.coordinator.read_api.data.thermostat_on:
             return HVACMode.HEAT
         return HVACMode.OFF
 
-    async def async_set_temperature(self, **kwargs) -> None:
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Turn on thermostat by setting a target temperature."""
         raw_target_temp = kwargs[ATTR_TEMPERATURE]
         self.last_temp = int(raw_target_temp)
@@ -93,7 +101,7 @@ class IntellifireClimate(IntellifireEntity, ClimateEntity):
         """Return target temperature."""
         return float(self.coordinator.read_api.data.thermostat_setpoint_c)
 
-    async def async_set_hvac_mode(self, hvac_mode: str) -> None:
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode to normal or thermostat control."""
         LOGGER.debug(
             "Setting mode to [%s] - using last temp: %s", hvac_mode, self.last_temp

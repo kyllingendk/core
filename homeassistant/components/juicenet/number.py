@@ -1,12 +1,16 @@
 """Support for controlling juicenet/juicepoint/juicebox based EVSE numbers."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from pyjuicenet import Api, Charger
 
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
-from homeassistant.components.number.const import DEFAULT_MAX_VALUE
+from homeassistant.components.number import (
+    DEFAULT_MAX_VALUE,
+    NumberEntity,
+    NumberEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,25 +20,17 @@ from .const import DOMAIN, JUICENET_API, JUICENET_COORDINATOR
 from .entity import JuiceNetDevice
 
 
-@dataclass
-class JuiceNetNumberEntityDescriptionMixin:
-    """Mixin for required keys."""
-
-    setter_key: str
-
-
-@dataclass
-class JuiceNetNumberEntityDescription(
-    NumberEntityDescription, JuiceNetNumberEntityDescriptionMixin
-):
+@dataclass(frozen=True, kw_only=True)
+class JuiceNetNumberEntityDescription(NumberEntityDescription):
     """An entity description for a JuiceNetNumber."""
 
+    setter_key: str
     native_max_value_key: str | None = None
 
 
 NUMBER_TYPES: tuple[JuiceNetNumberEntityDescription, ...] = (
     JuiceNetNumberEntityDescription(
-        name="Amperage Limit",
+        translation_key="amperage_limit",
         key="current_charging_amperage_limit",
         native_min_value=6,
         native_max_value_key="max_charging_amperage",
@@ -76,8 +72,6 @@ class JuiceNetNumber(JuiceNetDevice, NumberEntity):
         """Initialise the number."""
         super().__init__(device, description.key, coordinator)
         self.entity_description = description
-
-        self._attr_name = f"{self.device.name} {description.name}"
 
     @property
     def native_value(self) -> float | None:

@@ -1,4 +1,5 @@
 """Support for WiLight Fan."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,7 +14,7 @@ from pywilight.const import (
     WL_SPEED_LOW,
     WL_SPEED_MEDIUM,
 )
-from pywilight.wilight_device import Device as PyWiLightDevice
+from pywilight.wilight_device import PyWiLightDevice
 
 from homeassistant.components.fan import DIRECTION_FORWARD, FanEntity, FanEntityFeature
 from homeassistant.config_entries import ConfigEntry
@@ -54,7 +55,7 @@ async def async_setup_entry(
 class WiLightFan(WiLightDevice, FanEntity):
     """Representation of a WiLights fan."""
 
-    _attr_icon = "mdi:fan"
+    _attr_name = None
     _attr_speed_count = len(ORDERED_NAMED_FAN_SPEEDS)
     _attr_supported_features = FanEntityFeature.SET_SPEED | FanEntityFeature.DIRECTION
 

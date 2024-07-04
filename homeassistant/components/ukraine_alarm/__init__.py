@@ -1,4 +1,5 @@
 """The ukraine_alarm component."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -33,7 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 
@@ -46,7 +47,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-class UkraineAlarmDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+class UkraineAlarmDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):  # pylint: disable=hass-enforce-coordinator-module
     """Class to manage fetching Ukraine Alarm API."""
 
     def __init__(

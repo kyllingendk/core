@@ -1,4 +1,5 @@
 """Support for the Swedish weather institute weather service."""
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_LATITUDE,
@@ -20,7 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unique_id = f"{entry.data[CONF_LOCATION][CONF_LATITUDE]}-{entry.data[CONF_LOCATION][CONF_LONGITUDE]}"
         hass.config_entries.async_update_entry(entry, unique_id=unique_id)
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -40,9 +41,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             },
         }
 
-        if not hass.config_entries.async_update_entry(entry, data=new_data):
+        if not hass.config_entries.async_update_entry(entry, data=new_data, version=2):
             return False
-
-        entry.version = 2
 
     return True

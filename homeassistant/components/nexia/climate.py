@@ -1,5 +1,8 @@
 """Support for Nexia / Trane XL thermostats."""
+
 from __future__ import annotations
+
+from typing import Any
 
 from nexia.const import (
     HOLD_PERMANENT,
@@ -18,22 +21,23 @@ from nexia.util import find_humidity_setpoint
 from nexia.zone import NexiaThermostatZone
 import voluptuous as vol
 
-from homeassistant.components.climate import ClimateEntity
-from homeassistant.components.climate.const import (
+from homeassistant.components.climate import (
     ATTR_HUMIDITY,
     ATTR_HVAC_MODE,
     ATTR_TARGET_TEMP_HIGH,
     ATTR_TARGET_TEMP_LOW,
+    ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_TEMPERATURE, TEMP_CELSIUS, TEMP_FAHRENHEIT
+from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_platform
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import VolDictType
 
 from .const import (
     ATTR_AIRCLEANER_MODE,
@@ -52,11 +56,11 @@ SERVICE_SET_AIRCLEANER_MODE = "set_aircleaner_mode"
 SERVICE_SET_HUMIDIFY_SETPOINT = "set_humidify_setpoint"
 SERVICE_SET_HVAC_RUN_MODE = "set_hvac_run_mode"
 
-SET_AIRCLEANER_SCHEMA = {
+SET_AIRCLEANER_SCHEMA: VolDictType = {
     vol.Required(ATTR_AIRCLEANER_MODE): cv.string,
 }
 
-SET_HUMIDITY_SCHEMA = {
+SET_HUMIDITY_SCHEMA: VolDictType = {
     vol.Required(ATTR_HUMIDITY): vol.All(vol.Coerce(int), vol.Range(min=35, max=65)),
 }
 
@@ -105,6 +109,8 @@ NEXIA_SUPPORTED = (
     | ClimateEntityFeature.TARGET_TEMPERATURE
     | ClimateEntityFeature.FAN_MODE
     | ClimateEntityFeature.PRESET_MODE
+    | ClimateEntityFeature.TURN_OFF
+    | ClimateEntityFeature.TURN_ON
 )
 
 
@@ -148,13 +154,14 @@ async def async_setup_entry(
 class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
     """Provides Nexia Climate support."""
 
+    _attr_name = None
+    _enable_turn_on_off_backwards_compatibility = False
+
     def __init__(
         self, coordinator: NexiaDataUpdateCoordinator, zone: NexiaThermostatZone
     ) -> None:
         """Initialize the thermostat."""
-        super().__init__(
-            coordinator, zone, name=zone.get_name(), unique_id=zone.zone_id
-        )
+        super().__init__(coordinator, zone, zone.zone_id)
         unit = self._thermostat.get_unit()
         min_humidity, max_humidity = self._thermostat.get_humidity_setpoint_limits()
         min_setpoint, max_setpoint = self._thermostat.get_setpoint_limits()
@@ -164,12 +171,11 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
         self._has_emergency_heat = self._thermostat.has_emergency_heat()
         self._has_humidify_support = self._thermostat.has_humidify_support()
         self._has_dehumidify_support = self._thermostat.has_dehumidify_support()
-        supported = NEXIA_SUPPORTED
+        self._attr_supported_features = NEXIA_SUPPORTED
         if self._has_humidify_support or self._has_dehumidify_support:
-            supported |= ClimateEntityFeature.TARGET_HUMIDITY
+            self._attr_supported_features |= ClimateEntityFeature.TARGET_HUMIDITY
         if self._has_emergency_heat:
-            supported |= ClimateEntityFeature.AUX_HEAT
-        self._attr_supported_features = supported
+            self._attr_supported_features |= ClimateEntityFeature.AUX_HEAT
         self._attr_preset_modes = self._zone.get_presets()
         self._attr_fan_modes = self._thermostat.get_fan_modes()
         self._attr_hvac_modes = HVAC_MODES
@@ -177,7 +183,9 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
         self._attr_max_humidity = percent_conv(max_humidity)
         self._attr_min_temp = min_setpoint
         self._attr_max_temp = max_setpoint
-        self._attr_temperature_unit = TEMP_CELSIUS if unit == "C" else TEMP_FAHRENHEIT
+        self._attr_temperature_unit = (
+            UnitOfTemperature.CELSIUS if unit == "C" else UnitOfTemperature.FAHRENHEIT
+        )
         self._attr_target_temperature_step = 0.5 if unit == "C" else 1.0
 
     @property
@@ -195,7 +203,7 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
         """Return the fan setting."""
         return self._thermostat.get_fan_mode()
 
-    async def async_set_fan_mode(self, fan_mode):
+    async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set new target fan mode."""
         await self._thermostat.set_fan_mode(fan_mode)
         self._signal_thermostat_update()
@@ -204,7 +212,7 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
         """Set the hvac run mode."""
         if run_mode is not None:
             if run_mode == HOLD_PERMANENT:
-                await self._zone.call_permanent_hold()
+                await self._zone.set_permanent_hold()
             else:
                 await self._zone.call_return_to_schedule()
         if hvac_mode is not None:
@@ -216,7 +224,7 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
         """Preset that is active."""
         return self._zone.get_preset()
 
-    async def async_set_humidity(self, humidity):
+    async def async_set_humidity(self, humidity: int) -> None:
         """Dehumidify target."""
         if self._thermostat.has_dehumidify_support():
             await self.async_set_dehumidify_setpoint(humidity)
@@ -303,7 +311,7 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
 
         return NEXIA_TO_HA_HVAC_MODE_MAP[mode]
 
-    async def async_set_temperature(self, **kwargs):
+    async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set target temperature."""
         new_heat_temp = kwargs.get(ATTR_TARGET_TEMP_LOW)
         new_cool_temp = kwargs.get(ATTR_TARGET_TEMP_HIGH)
@@ -364,29 +372,29 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
             attrs[ATTR_HUMIDIFY_SETPOINT] = humdify_setpoint
         return attrs
 
-    async def async_set_preset_mode(self, preset_mode: str):
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set the preset mode."""
         await self._zone.set_preset(preset_mode)
         self._signal_zone_update()
 
-    async def async_turn_aux_heat_off(self):
+    async def async_turn_aux_heat_off(self) -> None:
         """Turn Aux Heat off."""
         await self._thermostat.set_emergency_heat(False)
         self._signal_thermostat_update()
 
-    async def async_turn_aux_heat_on(self):
+    async def async_turn_aux_heat_on(self) -> None:
         """Turn Aux Heat on."""
-        self._thermostat.set_emergency_heat(True)
+        await self._thermostat.set_emergency_heat(True)
         self._signal_thermostat_update()
 
-    async def async_turn_off(self):
+    async def async_turn_off(self) -> None:
         """Turn off the zone."""
-        await self.async_set_hvac_mode(OPERATION_MODE_OFF)
+        await self.async_set_hvac_mode(HVACMode.OFF)
         self._signal_zone_update()
 
-    async def async_turn_on(self):
+    async def async_turn_on(self) -> None:
         """Turn on the zone."""
-        await self.async_set_hvac_mode(OPERATION_MODE_AUTO)
+        await self.async_set_hvac_mode(HVACMode.AUTO)
         self._signal_zone_update()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -397,7 +405,7 @@ class NexiaZone(NexiaThermostatZoneEntity, ClimateEntity):
             await self._zone.call_return_to_schedule()
             await self._zone.set_mode(mode=OPERATION_MODE_AUTO)
         else:
-            await self._zone.call_permanent_hold()
+            await self._zone.set_permanent_hold()
             await self._zone.set_mode(mode=HA_TO_NEXIA_HVAC_MODE_MAP[hvac_mode])
 
         self._signal_zone_update()

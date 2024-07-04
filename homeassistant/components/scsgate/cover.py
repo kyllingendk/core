@@ -1,4 +1,5 @@
 """Support for SCSGate covers."""
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,10 @@ from scsgate.tasks import (
 )
 import voluptuous as vol
 
-from homeassistant.components.cover import PLATFORM_SCHEMA, CoverEntity
+from homeassistant.components.cover import (
+    PLATFORM_SCHEMA as COVER_PLATFORM_SCHEMA,
+    CoverEntity,
+)
 from homeassistant.const import CONF_DEVICES, CONF_NAME
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
@@ -20,7 +24,7 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import CONF_SCS_ID, DOMAIN, SCSGATE_SCHEMA
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = COVER_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_DEVICES): cv.schema_with_slug_keys(SCSGATE_SCHEMA)}
 )
 
@@ -59,6 +63,8 @@ def setup_platform(
 class SCSGateCover(CoverEntity):
     """Representation of SCSGate cover."""
 
+    _attr_should_poll = False
+
     def __init__(self, scs_id, name, logger, scsgate):
         """Initialize the cover."""
         self._scs_id = scs_id
@@ -70,11 +76,6 @@ class SCSGateCover(CoverEntity):
     def scs_id(self):
         """Return the SCSGate ID."""
         return self._scs_id
-
-    @property
-    def should_poll(self) -> bool:
-        """No polling needed."""
-        return False
 
     @property
     def name(self) -> str:

@@ -1,13 +1,11 @@
 """Describe ZHA logbook events."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from homeassistant.components.logbook.const import (
-    LOGBOOK_ENTRY_MESSAGE,
-    LOGBOOK_ENTRY_NAME,
-)
+from homeassistant.components.logbook import LOGBOOK_ENTRY_MESSAGE, LOGBOOK_ENTRY_NAME
 from homeassistant.const import ATTR_COMMAND, ATTR_DEVICE_ID
 from homeassistant.core import Event, HomeAssistant, callback
 import homeassistant.helpers.device_registry as dr
@@ -29,11 +27,11 @@ def async_describe_events(
 
     @callback
     def async_describe_zha_event(event: Event) -> dict[str, str]:
-        """Describe zha logbook event."""
+        """Describe ZHA logbook event."""
         device: dr.DeviceEntry | None = None
         device_name: str = "Unknown device"
         zha_device: ZHADevice | None = None
-        event_data: dict = event.data
+        event_data = event.data
         event_type: str | None = None
         event_subtype: str | None = None
 

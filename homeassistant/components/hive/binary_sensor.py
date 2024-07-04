@@ -1,4 +1,5 @@
 """Support for the Hive binary sensors."""
+
 from datetime import timedelta
 
 from homeassistant.components.binary_sensor import (
@@ -51,13 +52,17 @@ async def async_setup_entry(
 
     hive = hass.data[DOMAIN][entry.entry_id]
     devices = hive.session.deviceList.get("binary_sensor")
-    entities = []
-    if devices:
-        for description in BINARY_SENSOR_TYPES:
-            for dev in devices:
-                if dev["hiveType"] == description.key:
-                    entities.append(HiveBinarySensorEntity(hive, dev, description))
-    async_add_entities(entities, True)
+    if not devices:
+        return
+    async_add_entities(
+        (
+            HiveBinarySensorEntity(hive, dev, description)
+            for dev in devices
+            for description in BINARY_SENSOR_TYPES
+            if dev["hiveType"] == description.key
+        ),
+        True,
+    )
 
 
 class HiveBinarySensorEntity(HiveEntity, BinarySensorEntity):
@@ -68,7 +73,7 @@ class HiveBinarySensorEntity(HiveEntity, BinarySensorEntity):
         super().__init__(hive, hive_device)
         self.entity_description = entity_description
 
-    async def async_update(self):
+    async def async_update(self) -> None:
         """Update all Node data from Hive."""
         await self.hive.session.updateData(self.device)
         self.device = await self.hive.sensor.getSensor(self.device)

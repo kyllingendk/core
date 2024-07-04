@@ -1,4 +1,5 @@
 """The laundrify integration."""
+
 from __future__ import annotations
 
 from laundrify_aio import LaundrifyAPI
@@ -38,7 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "coordinator": coordinator,
     }
 
-    hass.config_entries.async_setup_platforms(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
 

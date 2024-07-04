@@ -1,8 +1,11 @@
 """deCONZ switch platform tests."""
 
-from unittest.mock import patch
+from collections.abc import Callable
+
+import pytest
 
 from homeassistant.components.siren import ATTR_DURATION, DOMAIN as SIREN_DOMAIN
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     SERVICE_TURN_OFF,
@@ -11,18 +14,15 @@ from homeassistant.const import (
     STATE_ON,
     STATE_UNAVAILABLE,
 )
+from homeassistant.core import HomeAssistant
 
-from .test_gateway import (
-    DECONZ_WEB_REQUEST,
-    mock_deconz_put_request,
-    setup_deconz_integration,
-)
+from tests.test_util.aiohttp import AiohttpClientMocker
 
 
-async def test_sirens(hass, aioclient_mock, mock_deconz_websocket):
-    """Test that siren entities are created."""
-    data = {
-        "lights": {
+@pytest.mark.parametrize(
+    "light_payload",
+    [
+        {
             "1": {
                 "name": "Warning device",
                 "type": "Warning device",
@@ -36,10 +36,15 @@ async def test_sirens(hass, aioclient_mock, mock_deconz_websocket):
                 "uniqueid": "00:00:00:00:00:00:00:01-00",
             },
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+async def test_sirens(
+    hass: HomeAssistant,
+    config_entry_setup: ConfigEntry,
+    mock_deconz_websocket,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+) -> None:
+    """Test that siren entities are created."""
     assert len(hass.states.async_all()) == 2
     assert hass.states.get("siren.warning_device").state == STATE_ON
     assert not hass.states.get("siren.unsupported_siren")
@@ -58,7 +63,7 @@ async def test_sirens(hass, aioclient_mock, mock_deconz_websocket):
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/lights/1/state")
+    aioclient_mock = mock_put_request("/lights/1/state")
 
     # Service turn on siren
 
@@ -90,13 +95,13 @@ async def test_sirens(hass, aioclient_mock, mock_deconz_websocket):
     )
     assert aioclient_mock.mock_calls[3][2] == {"alert": "lselect", "ontime": 100}
 
-    await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.config_entries.async_unload(config_entry_setup.entry_id)
 
     states = hass.states.async_all()
     assert len(states) == 2
     for state in states:
         assert state.state == STATE_UNAVAILABLE
 
-    await hass.config_entries.async_remove(config_entry.entry_id)
+    await hass.config_entries.async_remove(config_entry_setup.entry_id)
     await hass.async_block_till_done()
     assert len(hass.states.async_all()) == 0
